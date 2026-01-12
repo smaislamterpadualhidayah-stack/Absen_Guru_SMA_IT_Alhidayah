@@ -62,7 +62,7 @@
             <span class="text-[10px] font-bold uppercase opacity-50 tracking-widest text-cyan-400">Status Lokasi</span>
             <span id="status-tag" class="text-[9px] px-2 py-1 rounded bg-slate-700 font-bold uppercase tracking-tighter">Standby</span>
           </div>
-          <p id="distance-info" class="text-[11px] text-white/60 leading-relaxed italic">Validasi posisi: Pamenang (Radius 500m).</p>
+          <p id="distance-info" class="text-[11px] text-white/60 leading-relaxed italic">Lokasi akan dicatat otomatis saat menekan tombol masuk.</p>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
@@ -88,10 +88,6 @@
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyu06IktusxV2CFVzLKEcviUdt6D-tdBJ3xXY7ntfo7oKzA9lJ8PxIdDKObqEXrB0Ux/exec";
     
-    // KOORDINAT PAMENANG YANG SUDAH DIPERBAIKI
-    const SCHOOL_COORDS = { lat: -5.3524, lng: 104.9105 }; 
-    const MAX_DISTANCE = 500; 
-
     const btnMasuk = document.getElementById('btn-masuk');
     const btnPulang = document.getElementById('btn-pulang');
     const submitBtn = document.getElementById('submit-btn');
@@ -103,17 +99,6 @@
     setInterval(() => {
       document.getElementById('live-clock').innerText = new Date().toLocaleTimeString('id-ID', { hour12: false });
     }, 1000);
-
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371e3;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
 
     function validateForm() {
       const name = document.getElementById('teacher-name').value;
@@ -135,55 +120,43 @@
 
       if (!navigator.geolocation) {
         alert("Browser Anda tidak mendukung GPS");
+        btnMasuk.disabled = false;
+        btnMasuk.innerText = "🚪 MASUK";
         return;
       }
 
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const userLat = pos.coords.latitude;
         const userLon = pos.coords.longitude;
-        const distance = calculateDistance(userLat, userLon, SCHOOL_COORDS.lat, SCHOOL_COORDS.lng);
 
-        if (distance <= MAX_DISTANCE) {
-          const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-          document.getElementById('jam-masuk').value = time;
-          locationDisplay.classList.remove('hidden');
+        const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('jam-masuk').value = time;
+        locationDisplay.classList.remove('hidden');
 
-          statusTag.innerText = "VALID";
-          statusTag.className = "text-[9px] px-2 py-1 rounded bg-green-500 text-white font-bold uppercase";
-          distanceInfo.innerHTML = `Terverifikasi! Jarak: <span class="text-green-400">${Math.round(distance)}m</span>`;
+        statusTag.innerText = "LOKASI DICATAT";
+        statusTag.className = "text-[9px] px-2 py-1 rounded bg-green-500 text-white font-bold uppercase";
+        distanceInfo.innerHTML = `Koordinat: <span class="text-green-400">${userLat.toFixed(4)}, ${userLon.toFixed(4)}</span>`;
 
-          try {
-            // Mengambil alamat dengan bahasa Indonesia (accept-language: id)
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${userLat}&lon=${userLon}`, {
-                headers: { 'Accept-Language': 'id' }
-            });
-            const data = await response.json();
-            
-            // Logika fallback: Gunakan koordinat jika alamat dari OSM masih kurang akurat
-            let address = data.display_name || `Pamenang, Pringsewu (${userLat}, ${userLon})`;
-            
-            // Jika kata 'Panutan' muncul, kita paksa sedikit teksnya agar lebih akurat ke Pamenang
-            if(address.includes("Panutan")) {
-                address = "Pamenang, Kec. Pagelaran, Kabupaten Pringsewu, Lampung";
-            }
-
-            document.getElementById('lokasi-data').value = address;
-            addressText.innerText = address;
-          } catch (e) {
-            document.getElementById('lokasi-data').value = `Pamenang, Pringsewu (${userLat}, ${userLon})`;
-            addressText.innerText = "Alamat terverifikasi di Pamenang.";
-          }
-
-          btnMasuk.innerText = "✅ MASUK BERHASIL";
-          btnMasuk.className = "py-4 rounded-2xl font-bold bg-slate-800 text-green-400 cursor-default border-b-4 border-slate-900";
-          btnPulang.disabled = false;
-          btnPulang.classList.remove('opacity-20', 'cursor-not-allowed');
-          validateForm();
-        } else {
-          alert(`Anda berada di luar radius (${Math.round(distance)}m).`);
-          btnMasuk.innerText = "🚪 COBA LAGI";
-          btnMasuk.disabled = false;
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${userLat}&lon=${userLon}`, {
+              headers: { 'Accept-Language': 'id' }
+          });
+          const data = await response.json();
+          const address = data.display_name || `${userLat}, ${userLon}`;
+          
+          document.getElementById('lokasi-data').value = address;
+          addressText.innerText = address;
+        } catch (e) {
+          document.getElementById('lokasi-data').value = `${userLat}, ${userLon}`;
+          addressText.innerText = "Alamat tidak terbaca, koordinat tersimpan.";
         }
+
+        btnMasuk.innerText = "✅ MASUK BERHASIL";
+        btnMasuk.className = "py-4 rounded-2xl font-bold bg-slate-800 text-green-400 cursor-default border-b-4 border-slate-900";
+        btnPulang.disabled = false;
+        btnPulang.classList.remove('opacity-20', 'cursor-not-allowed');
+        validateForm();
+
       }, (err) => {
         alert("Gagal ambil lokasi. Pastikan GPS aktif.");
         btnMasuk.disabled = false;
